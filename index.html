@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Slow job</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 480px;
+        margin: 80px auto;
+        padding: 0 16px;
+      }
+      progress {
+        width: 100%;
+        height: 24px;
+      }
+      button {
+        font-size: 16px;
+        padding: 8px 16px;
+      }
+      #status {
+        color: #555;
+        min-height: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Slow job</h1>
+    <button id="start">Start job</button>
+    <p id="status">No job yet.</p>
+    <progress id="bar" value="0" max="100"></progress>
+    <p id="percent">0%</p>
+
+    <script>
+      const startButton = document.getElementById("start");
+      const statusText = document.getElementById("status");
+      const bar = document.getElementById("bar");
+      const percentText = document.getElementById("percent");
+
+      function showProgress(value) {
+        bar.value = value;
+        percentText.textContent = `${value}%`;
+      }
+
+      startButton.addEventListener("click", async () => {
+        startButton.disabled = true;
+        showProgress(0);
+
+        // 1. Ask the API to create a job.
+        const response = await fetch("/jobs", { method: "POST" });
+        const { job_id: jobId } = await response.json();
+        statusText.textContent = `Job ${jobId} is waiting for a worker.`;
+
+        // 2. Open a WebSocket for this job's progress.
+        const ws = new WebSocket(`ws://${location.host}/ws/jobs/${jobId}`);
+
+        // 3. Each message is a number from 10 to 100.
+        ws.onmessage = (event) => {
+          showProgress(Number(event.data));
+          statusText.textContent = `Job ${jobId} is running.`;
+        };
+
+        // 4. The server closes the socket after 100.
+        ws.onclose = () => {
+          statusText.textContent = `Job ${jobId} finished.`;
+          startButton.disabled = false;
+        };
+      });
+    </script>
+  </body>
+</html>
